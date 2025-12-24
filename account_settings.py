@@ -1,6 +1,5 @@
 """
-⚙️ Настройки аккаунта — Dark Futuristic Corporate UI
-Современный премиальный интерфейс, единый стиль с модулем банкротств
+⚙️ Настройки аккаунта
 """
 
 from PyQt6.QtWidgets import (
@@ -14,13 +13,12 @@ import os
 
 from .base import ModeBase
 
-# Импортируем менеджер настроек
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from settings_manager import get_settings_manager
 
 
 class AccountSettingsMode(ModeBase):
-    """Режим настроек аккаунта (премиальный dark UI)"""
+    """Режим настроек аккаунта"""
 
     def __init__(self, parent=None):
         super().__init__(
@@ -35,7 +33,7 @@ class AccountSettingsMode(ModeBase):
         """Инициализация UI в стиле Dark Futuristic Corporate"""
 
         # =======================================================
-        # HERO-КАРТОЧКА — крупный блок с красивым оформлением
+        # HERO-КАРТОЧКА
         # =======================================================
         hero_card = QWidget()
         hero_card.setObjectName("settingsHeroCard")
@@ -91,7 +89,7 @@ class AccountSettingsMode(ModeBase):
         self.content_layout.addWidget(hero_card)
 
         # =======================================================
-        # БЛОК АВТОРИЗАЦИИ — красивые поля, ровные карточки
+        # БЛОК АВТОРИЗАЦИИ
         # =======================================================
         auth_section, auth_layout = self.create_section(
             "🔐 Данные входа",
@@ -185,7 +183,7 @@ class AccountSettingsMode(ModeBase):
         self.content_layout.addWidget(auth_section)
 
         # =======================================================
-        # БЛОК TELEGRAM — настройки бота
+        # БЛОК TELEGRAM
         # =======================================================
         telegram_section, telegram_layout = self.create_section(
             "📱 Telegram Bot",
@@ -257,7 +255,7 @@ class AccountSettingsMode(ModeBase):
 
 
         # =======================================================
-        # СТАТУС — красивый индикатор состояния аккаунта
+        # СТАТУС
         # =======================================================
         status_section, status_layout = self.create_section("📊 Статус")
         status_section.setObjectName("statusSection")
@@ -282,7 +280,7 @@ class AccountSettingsMode(ModeBase):
         self.content_layout.addWidget(status_section)
 
         # =======================================================
-        # КНОПКИ ДЕЙСТВИЙ — премиальные неоновые кнопки
+        # КНОПКИ ДЕЙСТВИЙ
         # =======================================================
         actions_row = QHBoxLayout()
         actions_row.addStretch()
@@ -353,7 +351,7 @@ class AccountSettingsMode(ModeBase):
         self.content_layout.addLayout(actions_row)
 
     # =======================================================
-    # ЛОГИКА (не изменена)
+    # ЛОГИКА
     # =======================================================
     def toggle_password_visibility(self):
         if self.show_password_btn.isChecked():
