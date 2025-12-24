@@ -34,14 +34,17 @@ from email_ai_prompts import (
 
 logger = logging.getLogger(__name__)
 
-
 class EmailAIProcessor:
     """Процессор для автоматической email-переписки с ИИ"""
     
-    import os
-    openai.api_key = os.getenv("OPENAI_API_KEY", "")
+    # Импорт API ключа
+    try:
+        from api_config import OPENAI_API_KEY
+    except ImportError:
+        import os
+        OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     
-    def __init__(self, gmail_email: str, gmail_app_password: str, 
+    def __init__(self, gmail_email: str, gmail_app_password: str,
                  ai_style: str = "medium", collector_name: str = "Руслан",
                  send_delay: int = 60, reply_delay: int = 120):
         """
@@ -62,7 +65,7 @@ class EmailAIProcessor:
         
         # OpenAI клиент
         self.openai_client = OpenAI(api_key=self.OPENAI_API_KEY)
-        
+                
         # База данных для хранения диалогов
         self.db_path = Path.home() / ".maxcredit_email_ai" / "dialogs.db"
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -75,7 +78,7 @@ class EmailAIProcessor:
         self.is_running = False
         
         logger.info("✅ EmailAIProcessor инициализирован")
-    
+        
     def _init_database(self):
         """Инициализация SQLite базы для хранения диалогов"""
         conn = sqlite3.connect(self.db_path)

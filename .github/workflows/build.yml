@@ -25,12 +25,20 @@ jobs:
         run: |
           if [ "${{ github.ref_type }}" == "tag" ]; then
             VERSION="${{ github.ref_name }}"
-            VERSION="${VERSION#v}"  # Убираем 'v' из v1.5.0
+            VERSION="${VERSION#v}"
           else
             VERSION="dev"
           fi
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "Building version: $VERSION"
+      
+      - name: Create API config
+        shell: bash
+        run: |
+          cat > api_config.py << 'EOF'
+          # Auto-generated during build
+          OPENAI_API_KEY = "${{ secrets.OPENAI_API_KEY }}"
+          EOF
       
       - name: Install dependencies
         run: |
@@ -77,6 +85,14 @@ jobs:
           fi
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "Building version: $VERSION"
+      
+      - name: Create API config
+        shell: bash
+        run: |
+          cat > api_config.py << 'EOF'
+          # Auto-generated during build
+          OPENAI_API_KEY = "${{ secrets.OPENAI_API_KEY }}"
+          EOF
       
       - name: Install dependencies
         run: |

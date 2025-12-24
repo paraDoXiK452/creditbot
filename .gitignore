@@ -102,4 +102,4 @@ uploads/
 *.txt
 !requirements.txt
 !README.txt
-license_config.json
+license_config.jsonapi_config.py
