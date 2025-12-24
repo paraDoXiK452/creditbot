@@ -5,7 +5,7 @@ from pathlib import Path
 
 block_cipher = None
 
-# ✅ ИСПРАВЛЕНО: Безопасный поиск selenium_stealth/js
+# Безопасный поиск selenium_stealth/js
 selenium_stealth_js = None
 
 try:
@@ -17,7 +17,7 @@ try:
             potential_path = os.path.join(sp, 'selenium_stealth', 'js')
             if os.path.exists(potential_path):
                 selenium_stealth_js = potential_path
-                print(f"✅ Found selenium_stealth/js at: {potential_path}")
+                print(f"Found selenium_stealth/js at: {potential_path}")
                 break
     else:
         import sysconfig
@@ -25,18 +25,18 @@ try:
         potential_path = os.path.join(site_packages, 'selenium_stealth', 'js')
         if os.path.exists(potential_path):
             selenium_stealth_js = potential_path
-            print(f"✅ Found selenium_stealth/js at: {potential_path}")
+            print(f"Found selenium_stealth/js at: {potential_path}")
 except Exception as e:
-    print(f"⚠️ Could not locate selenium_stealth/js: {e}")
+    print(f"WARNING: Could not locate selenium_stealth/js: {e}")
 
 # Собираем datas
 datas = [('zoiper_assets', 'zoiper_assets')]
 
 if selenium_stealth_js and os.path.exists(selenium_stealth_js):
     datas.append((selenium_stealth_js, 'selenium_stealth/js'))
-    print(f"✅ Adding selenium_stealth/js to build")
+    print("Adding selenium_stealth/js to build")
 else:
-    print(f"⚠️ WARNING: selenium_stealth/js not found, skipping")
+    print("WARNING: selenium_stealth/js not found, skipping")
 
 a = Analysis(
     ['main.py'],
