@@ -46,9 +46,14 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
       
+      - name: Prepare spec file
+        run: |
+          $VERSION = "${{ steps.get_version.outputs.VERSION }}"
+          (Get-Content CreditBot.spec) -replace '\{VERSION\}', $VERSION | Set-Content CreditBot_build.spec
+      
       - name: Build Windows
         run: |
-          pyinstaller --onedir --noconsole --clean --name CreditBotV${{ steps.get_version.outputs.VERSION }} main.py
+          pyinstaller --clean CreditBot_build.spec
       
       - name: Create ZIP
         run: |
@@ -100,14 +105,23 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
       
+      - name: Prepare spec file
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          sed "s/{VERSION}/$VERSION/g" CreditBot.spec > CreditBot_build.spec
+      
       - name: Build macOS
         run: |
-          pyinstaller --onedir --noconsole --clean --name CreditBotV${{ steps.get_version.outputs.VERSION }} main.py
+          pyinstaller --clean CreditBot_build.spec
       
-      - name: Create ZIP
+      - name: Set executable permissions
+        run: |
+          chmod +x dist/CreditBotV${{ steps.get_version.outputs.VERSION }}/CreditBotV${{ steps.get_version.outputs.VERSION }}
+      
+      - name: Create ZIP with permissions preserved
         run: |
           cd dist/CreditBotV${{ steps.get_version.outputs.VERSION }}
-          zip -r ../CreditBot-macOS.zip *
+          zip -r ../CreditBot-macOS.zip * -X
       
       - name: Upload macOS build
         uses: actions/upload-artifact@v4
@@ -141,23 +155,26 @@ jobs:
             ## 🚀 CreditBot ${{ github.ref_name }}
             
             ### 📦 Скачать:
-            - **Windows** (x64): `CreditBot-Windows.zip`
-              - Внутри: `CreditBotV${{ github.ref_name }}.exe` + `_internal/`
-            - **macOS** (Intel/M1/M2/M3): `CreditBot-macOS.zip`
-              - Внутри: `CreditBotV${{ github.ref_name }}` + `_internal/`
             
-            ### 📋 Установка:
-            1. Скачай архив для своей ОС
-            2. Распакуй в любую папку
-            3. Запусти exe файл (Windows) или приложение (macOS)
+            **Windows (x64):**
+            - Скачай `CreditBot-Windows.zip`
+            - Распакуй
+            - Запусти `CreditBotV${{ github.ref_name }}.exe`
+            
+            **macOS (Intel/Apple Silicon):**
+            - Скачай `CreditBot-macOS.zip`
+            - Распакуй
+            - Открой Terminal в папке
+            - Выполни: `chmod +x CreditBotV${{ github.ref_name }}`
+            - Запусти: `./CreditBotV${{ github.ref_name }}`
             
             ### 🔄 Автообновление:
-            - Если у вас уже установлена версия 1.4.5+, программа автоматически предложит обновление
+            - Для пользователей v1.4.5+ обновление автоматическое (только Windows)
             
             ### ✨ Что нового:
-            - Поддержка macOS (Intel и Apple Silicon)
+            - Поддержка macOS
+            - Встроенный OpenAI API ключ
+            - Исправлен автообновлятор
             - Кроссплатформенная генерация HWID
-            - Автоматическая сборка через GitHub Actions
-            - Встроенный OpenAI API ключ для Email AI режима
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
