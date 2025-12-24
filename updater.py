@@ -258,167 +258,150 @@ class UpdateDownloader(QThread):
 
     def _create_bat_file(self, extract_dir: Path) -> Path:
         """
-        ✅ ИСПРАВЛЕНО: Только создает BAT файл, НЕ запускает его
-        Возвращает путь к созданному BAT файлу
+        ✅ ИСПРАВЛЕНО: Использует robocopy, ren вместо rmdir, убивает Edge
         """
         if getattr(sys, "frozen", False):
-            # Получаем ПОЛНЫЕ абсолютные пути (не короткие 8.3)
             app_dir = os.path.abspath(os.path.dirname(sys.executable))
             current_exe = os.path.basename(sys.executable)
         else:
             app_dir = os.path.abspath(os.path.dirname(__file__))
-            current_exe = "main.py"
-
-        self._log(f"Папка программы: {app_dir}")
-        self._log(f"Текущий exe: {current_exe}")
-
+            current_exe = "CreditBotV1.4.5.exe"
+        
         batch = self.temp_dir / "update.bat"
         log_path = os.path.join(app_dir, "update.log")
-        extract_dir_str = str(extract_dir.resolve())  # Полный путь для BAT
-
-        # Увеличенный BAT с timeout 10 секунд и подробным логированием
+        extract_dir_str = str(extract_dir.resolve())
+        
+        # ✅ ИСПРАВЛЕННЫЙ BAT с robocopy + ren + edge killer
         content = f"""@echo off
-chcp 65001 >nul
-echo ============================================ > "{log_path}"
-echo CREDITBOT UPDATE LOG >> "{log_path}"
-echo ============================================ >> "{log_path}"
-echo [%date% %time%] Начало обновления >> "{log_path}"
-echo Текущий exe: {current_exe} >> "{log_path}"
-echo Целевой exe: {EXE_PREFIX}{self.version}.exe >> "{log_path}"
-echo. >> "{log_path}"
+    chcp 65001 >nul
+    echo ============================================ > "{log_path}"
+    echo CREDITBOT UPDATE LOG >> "{log_path}"
+    echo ============================================ >> "{log_path}"
+    echo [%date% %time%] Начало обновления >> "{log_path}"
+    echo Текущий exe: {current_exe} >> "{log_path}"
+    echo Целевой exe: CreditBotV{self.version}.exe >> "{log_path}"
+    echo. >> "{log_path}"
 
-REM Ждем полного завершения старого процесса (УВЕЛИЧЕНО до 10 сек)
-echo [%date% %time%] Ожидание завершения процесса Python... >> "{log_path}"
-timeout /t 10 /nobreak >nul
+    REM ✅ Убиваем Edge/WebView который может держать dll
+    echo [%date% %time%] Убиваем Edge/WebView >> "{log_path}"
+    taskkill /F /IM msedge.exe >nul 2>&1
+    taskkill /F /IM msedgewebview2.exe >nul 2>&1
+    timeout /t 2 /nobreak >nul
 
-REM Проверяем что процесс действительно завершился
-echo [%date% %time%] Проверка процессов... >> "{log_path}"
-tasklist | find /I "{current_exe}" >> "{log_path}" 2>&1
-if not errorlevel 1 (
-    echo WARNING: Процесс {current_exe} еще работает! >> "{log_path}"
-    echo Ждем еще 5 секунд... >> "{log_path}"
-    timeout /t 5 /nobreak >nul
-)
+    REM Ждем завершения Python
+    echo [%date% %time%] Ожидание Python (10 сек)... >> "{log_path}"
+    timeout /t 10 /nobreak >nul
 
-REM Переименовываем старый exe
-echo [%date% %time%] Переименовываем старый exe >> "{log_path}"
-if exist "{app_dir}\\{current_exe}" (
-    echo Файл найден, переименовываем... >> "{log_path}"
-    ren "{app_dir}\\{current_exe}" "{current_exe}.old" >> "{log_path}" 2>&1
-    if errorlevel 1 (
-        echo ERROR: Не удалось переименовать старый exe >> "{log_path}"
-        echo Возможно файл еще используется процессом >> "{log_path}"
-        pause
-        exit /b 1
-    )
-    echo OK: Старый exe переименован >> "{log_path}"
-)
-
-REM Удаляем старые бэкапы
-echo [%date% %time%] Удаляем старые .old файлы >> "{log_path}"
-del /F /Q "{app_dir}\\{EXE_PREFIX}*.exe.old" 2>nul
-
-REM Копируем новый exe
-echo [%date% %time%] Копируем новый exe >> "{log_path}"
-copy /Y "{extract_dir_str}\\{EXE_PREFIX}{self.version}.exe" "{app_dir}\\" >> "{log_path}" 2>&1
-if errorlevel 1 (
-    echo ERROR: Не удалось скопировать exe >> "{log_path}"
-    goto RESTORE
-)
-echo OK: Новый exe скопирован >> "{log_path}"
-
-REM Копируем папку _internal (критична для onedir)
-echo [%date% %time%] Копируем папку _internal >> "{log_path}"
-if exist "{extract_dir_str}\\_internal" (
-    echo Удаляем старую _internal >> "{log_path}"
-    if exist "{app_dir}\\_internal" (
-        rmdir /S /Q "{app_dir}\\_internal" >> "{log_path}" 2>&1
+    REM ✅ Переименовываем старый exe (не удаляем!)
+    echo [%date% %time%] Переименование старого exe >> "{log_path}"
+    if exist "{app_dir}\\{current_exe}" (
+        ren "{app_dir}\\{current_exe}" "{current_exe}.old" >> "{log_path}" 2>&1
         if errorlevel 1 (
-            echo WARNING: Не удалось удалить старую _internal >> "{log_path}"
+            echo ERROR: Не удалось переименовать exe >> "{log_path}"
+            pause
+            exit /b 1
         )
+        echo OK: Старый exe переименован >> "{log_path}"
     )
-    
-    echo Копируем новую _internal >> "{log_path}"
-    xcopy /E /I /Y /Q "{extract_dir_str}\\_internal" "{app_dir}\\_internal" >> "{log_path}" 2>&1
+
+    REM ✅ Копируем новый exe
+    echo [%date% %time%] Копирование нового exe >> "{log_path}"
+    copy /Y "{extract_dir_str}\\CreditBotV{self.version}.exe" "{app_dir}\\" >> "{log_path}" 2>&1
     if errorlevel 1 (
-        echo ERROR: Не удалось скопировать _internal >> "{log_path}"
+        echo ERROR: copy exe failed >> "{log_path}"
         goto RESTORE
     )
-    echo OK: _internal скопирована >> "{log_path}"
-) else (
-    echo WARNING: _internal не найдена в архиве >> "{log_path}"
-)
+    echo OK: exe скопирован >> "{log_path}"
 
-REM Копируем остальные файлы
-echo [%date% %time%] Копируем остальные файлы >> "{log_path}"
-for /f "delims=" %%f in ('dir /b /a-d "{extract_dir}"') do (
-    if not "%%f"=="{EXE_PREFIX}{self.version}.exe" (
-        if not "%%f"=="_internal" (
-            echo   Копируем: %%f >> "{log_path}"
-            copy /Y "{extract_dir_str}\\%%f" "{app_dir}\\" >> "{log_path}" 2>&1
+    REM ✅ КРИТИЧНО: Переименовываем старую _internal (НЕ удаляем!)
+    echo [%date% %time%] Переименование старой _internal >> "{log_path}"
+    if exist "{app_dir}\\_internal" (
+        ren "{app_dir}\\_internal" "_internal.old" >> "{log_path}" 2>&1
+        if errorlevel 1 (
+            echo WARNING: Не удалось переименовать _internal >> "{log_path}"
+        ) else (
+            echo OK: _internal переименована >> "{log_path}"
         )
     )
-)
 
-REM Проверка успешности
-echo [%date% %time%] Проверка результата >> "{log_path}"
-if exist "{app_dir}\\{EXE_PREFIX}{self.version}.exe" (
-    echo OK: Новый exe найден >> "{log_path}"
-    
-    REM Удаляем старый бэкап
+    REM ✅ Используем ROBOCOPY вместо xcopy
+    echo [%date% %time%] Копирование _internal (robocopy) >> "{log_path}"
+    if exist "{extract_dir_str}\\_internal" (
+        robocopy "{extract_dir_str}\\_internal" "{app_dir}\\_internal" /E /R:2 /W:1 /NFL /NDL >> "{log_path}" 2>&1
+        
+        REM robocopy errorlevel: 0-7 OK, 8+ error
+        if errorlevel 8 (
+            echo ERROR: robocopy failed >> "{log_path}"
+            goto RESTORE
+        )
+        echo OK: _internal скопирована >> "{log_path}"
+    ) else (
+        echo WARNING: _internal не найдена в архиве >> "{log_path}"
+    )
+
+    REM Удаляем старый бэкап _internal
+    echo [%date% %time%] Очистка старых бэкапов >> "{log_path}"
+    if exist "{app_dir}\\_internal.old" (
+        rmdir /S /Q "{app_dir}\\_internal.old" >> "{log_path}" 2>&1
+    )
     if exist "{app_dir}\\{current_exe}.old" (
-        echo Удаляем старый бэкап >> "{log_path}"
         del /F /Q "{app_dir}\\{current_exe}.old" >> "{log_path}" 2>&1
     )
-    
-    echo [%date% %time%] Запускаем новую версию >> "{log_path}"
-    echo ============================================ >> "{log_path}"
-    echo ОБНОВЛЕНИЕ УСПЕШНО ЗАВЕРШЕНО >> "{log_path}"
-    echo ============================================ >> "{log_path}"
-    start "" "{app_dir}\\{EXE_PREFIX}{self.version}.exe"
-    goto CLEANUP
-) else (
-    echo ERROR: Новый exe НЕ найден после копирования! >> "{log_path}"
-    goto RESTORE
-)
 
-:RESTORE
-echo ============================================ >> "{log_path}"
-echo ОШИБКА! Попытка восстановления... >> "{log_path}"
-echo ============================================ >> "{log_path}"
-if exist "{app_dir}\\{current_exe}.old" (
-    ren "{app_dir}\\{current_exe}.old" "{current_exe}" >> "{log_path}" 2>&1
-    if errorlevel 1 (
-        echo CRITICAL: Не удалось восстановить! >> "{log_path}"
+    REM Проверка успешности
+    echo [%date% %time%] Проверка результата >> "{log_path}"
+    if exist "{app_dir}\\CreditBotV{self.version}.exe" (
+        echo ============================================ >> "{log_path}"
+        echo ОБНОВЛЕНИЕ УСПЕШНО ЗАВЕРШЕНО >> "{log_path}"
+        echo ============================================ >> "{log_path}"
+        
+        start "" "{app_dir}\\CreditBotV{self.version}.exe"
+        goto CLEANUP
     ) else (
-        echo Старая версия восстановлена >> "{log_path}"
+        echo ERROR: Новый exe НЕ найден! >> "{log_path}"
+        goto RESTORE
+    )
+
+    :RESTORE
+    echo ============================================ >> "{log_path}"
+    echo ОШИБКА! Восстановление... >> "{log_path}"
+    echo ============================================ >> "{log_path}"
+
+    REM Восстанавливаем exe
+    if exist "{app_dir}\\{current_exe}.old" (
+        if exist "{app_dir}\\CreditBotV{self.version}.exe" (
+            del /F /Q "{app_dir}\\CreditBotV{self.version}.exe"
+        )
+        ren "{app_dir}\\{current_exe}.old" "{current_exe}" >> "{log_path}" 2>&1
+        echo Старый exe восстановлен >> "{log_path}"
+    )
+
+    REM Восстанавливаем _internal
+    if exist "{app_dir}\\_internal.old" (
+        if exist "{app_dir}\\_internal" (
+            rmdir /S /Q "{app_dir}\\_internal"
+        )
+        ren "{app_dir}\\_internal.old" "_internal" >> "{log_path}" 2>&1
+        echo Старая _internal восстановлена >> "{log_path}"
+        
         start "" "{app_dir}\\{current_exe}"
     )
-) else (
-    echo CRITICAL: Файл .old не найден! >> "{log_path}"
-)
-pause
-exit /b 1
 
-:CLEANUP
-echo [%date% %time%] Очистка временных файлов >> "{log_path}"
-timeout /t 2 /nobreak >nul
-rmdir /S /Q "{self.temp_dir}" 2>nul
-del "%~f0"
-"""
+    pause
+    exit /b 1
 
-        with open(batch, "w", encoding="cp866") as f:  # cp866 для корректного отображения русского текста
+    :CLEANUP
+    echo [%date% %time%] Очистка временных файлов >> "{log_path}"
+    timeout /t 2 /nobreak >nul
+    rmdir /S /Q "{self.temp_dir}" 2>nul
+    del "%~f0"
+    """
+
+        with open(batch, "w", encoding="cp866") as f:
             f.write(content)
 
-        self._log("BAT файл создан успешно")
+        self._log("BAT файл создан (robocopy + ren)")
         return batch
-
-    def _log(self, text: str):
-        self.temp_dir.mkdir(exist_ok=True)
-        with open(self.log_file, "a", encoding="utf-8") as f:
-            f.write(text + "\n")
-        print("[UPDATER]", text)
-
 
 # =========================
 # ФУНКЦИЯ ЗАПУСКА BAT
@@ -426,7 +409,7 @@ del "%~f0"
 
 def execute_update_bat(bat_path: str):
     """
-    ✅ НОВАЯ ФУНКЦИЯ: Запуск BAT файла обновления
+    ✅ ИСПРАВЛЕННАЯ ФУНКЦИЯ: Запуск BAT файла обновления
     Вызывается из главного потока ПОСЛЕ остановки всех QThread
     """
     print("[UPDATER] Запуск BAT файла обновления...")
@@ -455,25 +438,23 @@ def execute_update_bat(bat_path: str):
         
         print(f"[UPDATER] Запуск BAT: {bat_path}")
         
-        # Запускаем BAT в отдельном процессе (ИСПРАВЛЕНО: убран CREATE_NEW_CONSOLE)
+        # ✅ ИСПРАВЛЕНО: Запуск через cmd /c (работает надежнее)
         subprocess.Popen(
-            [bat_path],
+            f'cmd /c start "" "{bat_path}"',
             shell=True,
-            creationflags=subprocess.DETACHED_PROCESS,
             cwd=os.path.dirname(bat_path)
         )
         
         print("[UPDATER] BAT запущен, завершаем Python процесс...")
         
-        # Принудительное завершение
-        time.sleep(1)
-        sys.exit(0)
+        # Принудительное завершение (увеличена задержка)
+        time.sleep(2)
+        os._exit(0)  # ✅ Более жесткий выход
         
     except Exception as e:
         print(f"[UPDATER] Ошибка запуска BAT: {e}")
         import traceback
         traceback.print_exc()
-
 
 # =========================
 # СИНХРОННАЯ ПРОВЕРКА
