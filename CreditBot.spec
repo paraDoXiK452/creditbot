@@ -1,27 +1,48 @@
 # -*- mode: python ; coding: utf-8 -*-
 import sys
 import os
+from pathlib import Path
 
 block_cipher = None
 
-# Определяем путь к selenium_stealth/js кроссплатформенно
-if sys.platform == 'win32':
-    import site
-    site_packages = site.getsitepackages()[0]
-else:
-    import sysconfig
-    site_packages = sysconfig.get_paths()["purelib"]
+# ✅ ИСПРАВЛЕНО: Безопасный поиск selenium_stealth/js
+selenium_stealth_js = None
 
-selenium_stealth_js = os.path.join(site_packages, 'selenium_stealth', 'js')
+try:
+    if sys.platform == 'win32':
+        import site
+        site_packages_list = site.getsitepackages()
+        # Пробуем все возможные пути
+        for sp in site_packages_list:
+            potential_path = os.path.join(sp, 'selenium_stealth', 'js')
+            if os.path.exists(potential_path):
+                selenium_stealth_js = potential_path
+                print(f"✅ Found selenium_stealth/js at: {potential_path}")
+                break
+    else:
+        import sysconfig
+        site_packages = sysconfig.get_paths()["purelib"]
+        potential_path = os.path.join(site_packages, 'selenium_stealth', 'js')
+        if os.path.exists(potential_path):
+            selenium_stealth_js = potential_path
+            print(f"✅ Found selenium_stealth/js at: {potential_path}")
+except Exception as e:
+    print(f"⚠️ Could not locate selenium_stealth/js: {e}")
+
+# Собираем datas
+datas = [('zoiper_assets', 'zoiper_assets')]
+
+if selenium_stealth_js and os.path.exists(selenium_stealth_js):
+    datas.append((selenium_stealth_js, 'selenium_stealth/js'))
+    print(f"✅ Adding selenium_stealth/js to build")
+else:
+    print(f"⚠️ WARNING: selenium_stealth/js not found, skipping")
 
 a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[
-        ('zoiper_assets', 'zoiper_assets'),
-        (selenium_stealth_js, 'selenium_stealth/js'),
-    ],
+    datas=datas,
     hiddenimports=[
         'selenium_stealth',
         'undetected_chromedriver',
