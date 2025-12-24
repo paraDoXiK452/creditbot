@@ -52,8 +52,8 @@ jobs:
       
       - name: Create ZIP
         run: |
-          cd dist
-          powershell Compress-Archive -Path CreditBotV${{ steps.get_version.outputs.VERSION }} -DestinationPath CreditBot-Windows.zip
+          cd dist/CreditBotV${{ steps.get_version.outputs.VERSION }}
+          powershell Compress-Archive -Path * -DestinationPath ../CreditBot-Windows.zip
       
       - name: Upload Windows build
         uses: actions/upload-artifact@v4
@@ -106,8 +106,8 @@ jobs:
       
       - name: Create ZIP
         run: |
-          cd dist
-          zip -r CreditBot-macOS.zip CreditBotV${{ steps.get_version.outputs.VERSION }}
+          cd dist/CreditBotV${{ steps.get_version.outputs.VERSION }}
+          zip -r ../CreditBot-macOS.zip *
       
       - name: Upload macOS build
         uses: actions/upload-artifact@v4
@@ -142,18 +142,22 @@ jobs:
             
             ### 📦 Скачать:
             - **Windows** (x64): `CreditBot-Windows.zip`
-              - Внутри: `CreditBotV${{ github.ref_name }}.exe`
+              - Внутри: `CreditBotV${{ github.ref_name }}.exe` + `_internal/`
             - **macOS** (Intel/M1/M2/M3): `CreditBot-macOS.zip`
-              - Внутри: `CreditBotV${{ github.ref_name }}`
+              - Внутри: `CreditBotV${{ github.ref_name }}` + `_internal/`
             
             ### 📋 Установка:
             1. Скачай архив для своей ОС
             2. Распакуй в любую папку
             3. Запусти exe файл (Windows) или приложение (macOS)
             
+            ### 🔄 Автообновление:
+            - Если у вас уже установлена версия 1.4.5+, программа автоматически предложит обновление
+            
             ### ✨ Что нового:
             - Поддержка macOS (Intel и Apple Silicon)
             - Кроссплатформенная генерация HWID
             - Автоматическая сборка через GitHub Actions
+            - Встроенный OpenAI API ключ для Email AI режима
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
