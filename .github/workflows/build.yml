@@ -1,0 +1,115 @@
+name: Build CreditBot
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:  # Можно запускать вручную
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+      
+      - name: Build Windows
+        run: |
+          pyinstaller --onedir --noconsole --clean --name CreditBot main.py
+      
+      - name: Create ZIP
+        run: |
+          cd dist
+          powershell Compress-Archive -Path CreditBot -DestinationPath CreditBot-Windows.zip
+      
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: CreditBot-Windows
+          path: dist/CreditBot-Windows.zip
+
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+      
+      - name: Build macOS
+        run: |
+          pyinstaller --onedir --noconsole --clean --name CreditBot main.py
+      
+      - name: Create ZIP
+        run: |
+          cd dist
+          zip -r CreditBot-macOS.zip CreditBot
+      
+      - name: Upload macOS build
+        uses: actions/upload-artifact@v4
+        with:
+          name: CreditBot-macOS
+          path: dist/CreditBot-macOS.zip
+
+  create-release:
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+      - name: Download Windows
+        uses: actions/download-artifact@v4
+        with:
+          name: CreditBot-Windows
+      
+      - name: Download macOS
+        uses: actions/download-artifact@v4
+        with:
+          name: CreditBot-macOS
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            CreditBot-Windows.zip
+            CreditBot-macOS.zip
+          body: |
+            ## 🚀 CreditBot ${{ github.ref_name }}
+            
+            ### 📦 Скачать:
+            - **Windows** (x64): `CreditBot-Windows.zip`
+            - **macOS** (Intel/M1/M2/M3): `CreditBot-macOS.zip`
+            
+            ### 📋 Установка:
+            1. Скачай архив для своей ОС
+            2. Распакуй в любую папку
+            3. Запусти `CreditBot` / `CreditBot.exe`
+            
+            ### ⚙️ Первый запуск:
+            - Введи данные аккаунта
+            - Настрой Telegram (опционально)
+            - Готово!
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

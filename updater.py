@@ -1,0 +1,514 @@
+# -*- coding: utf-8 -*-
+"""
+🔥 НАДЁЖНЫЙ АВТООБНОВЛЯТОР CREDITBOT - FIXED VERSION
+✅ БЕЗ DEADLOCK - правильное разделение ответственности
+✅ UpdateDownloader только скачивает и готовит BAT
+✅ Главный поток останавливает приложение и запускает BAT
+"""
+
+import os
+import sys
+import time
+import requests
+import zipfile
+import shutil
+import subprocess
+from pathlib import Path
+from PyQt6.QtCore import QThread, pyqtSignal
+
+
+# =========================
+# ОЧИСТКА СТАРЫХ ВРЕМЕННЫХ ФАЙЛОВ
+# =========================
+
+def cleanup_old_temp_files():
+    """
+    Удаляет старые временные папки обновлений (старше 1 дня)
+    """
+    try:
+        temp_base = Path(os.getenv("TEMP", "/tmp"))
+        for folder in temp_base.glob("creditbot_update_*"):
+            try:
+                # Проверяем возраст папки
+                folder_age = time.time() - folder.stat().st_mtime
+                if folder_age > 86400:  # Старше 1 дня (24 часа)
+                    shutil.rmtree(folder, ignore_errors=True)
+                    print(f"[UPDATER] Удалена старая временная папка: {folder.name}")
+            except Exception as e:
+                print(f"[UPDATER] Не удалось удалить {folder.name}: {e}")
+    except Exception as e:
+        print(f"[UPDATER] Ошибка очистки временных файлов: {e}")
+
+
+def stop_all_threads():
+    """
+    Корректно останавливает все активные QThread перед обновлением
+    ⚠️ ВАЖНО: Вызывать ТОЛЬКО из главного потока!
+    """
+    try:
+        from PyQt6.QtCore import QCoreApplication
+        
+        print("[UPDATER] Останавливаем все потоки...")
+        
+        # Получаем все активные потоки
+        for thread in QThread.allThreads():
+            # Пропускаем главный поток
+            if thread is QThread.currentThread():
+                continue
+                
+            thread_name = thread.objectName() or thread.__class__.__name__
+            print(f"[UPDATER]   Останавливаем поток: {thread_name}")
+            
+            # ВАЖНО: Проверяем что это действительно QThread
+            if not isinstance(thread, QThread):
+                print(f"[UPDATER]   ⚠️ Поток {thread_name} не является QThread, пропускаем")
+                continue
+            
+            # Пытаемся остановить поток корректно
+            if hasattr(thread, 'stop'):
+                try:
+                    thread.stop()
+                    print(f"[UPDATER]   Вызван метод stop() для {thread_name}")
+                except Exception as e:
+                    print(f"[UPDATER]   ⚠️ Ошибка при вызове stop(): {e}")
+            
+            # Отправляем сигнал завершения
+            try:
+                thread.quit()
+            except Exception as e:
+                print(f"[UPDATER]   ⚠️ Ошибка при вызове quit(): {e}")
+            
+            # Ждем завершения (максимум 3 секунды на поток)
+            try:
+                if not thread.wait(3000):
+                    print(f"[UPDATER]   ⚠️ Поток {thread_name} не завершился за 3 сек")
+                    # Пытаемся принудительно
+                    thread.terminate()
+                    thread.wait(1000)
+                else:
+                    print(f"[UPDATER]   ✓ Поток {thread_name} остановлен")
+            except Exception as e:
+                print(f"[UPDATER]   ⚠️ Ошибка при ожидании завершения: {e}")
+        
+        print("[UPDATER] Все потоки остановлены")
+        return True
+        
+    except Exception as e:
+        print(f"[UPDATER] Ошибка остановки потоков: {e}")
+        return False
+
+
+# =========================
+# НАСТРОЙКИ
+# =========================
+
+GITHUB_REPO = "paraDoxiK452/creditbot"
+GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+
+APP_NAME = "CreditBot"
+EXE_PREFIX = "CreditBotV"      # CreditBotV1.3.1.exe
+VERSION_FALLBACK = "0.0.0"     # ⬅️ ВАЖНО. НИКОГДА НЕ ПОДНИМАТЬ
+
+
+# =========================
+# ВЕРСИЯ
+# =========================
+
+def get_current_version() -> str:
+    """
+    Надёжно получает текущую версию.
+    Если не удалось — возвращает 0.0.0 (обновление ВСЕГДА возможно)
+    """
+    try:
+        if getattr(sys, "frozen", False):
+            exe_name = Path(sys.executable).stem
+            if exe_name.startswith(EXE_PREFIX):
+                return exe_name.replace(EXE_PREFIX, "")
+    except:
+        pass
+
+    return VERSION_FALLBACK
+
+
+CURRENT_VERSION = get_current_version()
+
+
+# =========================
+# CHECKER
+# =========================
+
+class UpdateChecker(QThread):
+    update_available = pyqtSignal(str, str)  # version, url
+    no_update = pyqtSignal()
+    error = pyqtSignal(str)
+
+    def run(self):
+        try:
+            print(f"[UPDATER] Текущая версия: {CURRENT_VERSION}")
+
+            r = requests.get(
+                GITHUB_API_URL,
+                timeout=10,
+                headers={"User-Agent": "CreditBot-Updater"}
+            )
+
+            if r.status_code != 200:
+                self.error.emit(f"GitHub error {r.status_code}")
+                return
+
+            data = r.json()
+            latest_version = data["tag_name"].lstrip("v")
+
+            print(f"[UPDATER] Последняя версия: {latest_version}")
+
+            if self.is_newer(latest_version, CURRENT_VERSION):
+                zip_url = None
+                for asset in data.get("assets", []):
+                    if asset["name"].endswith(".zip"):
+                        zip_url = asset["browser_download_url"]
+                        break
+
+                if not zip_url:
+                    self.error.emit("ZIP не найден в релизе")
+                    return
+
+                self.update_available.emit(latest_version, zip_url)
+            else:
+                self.no_update.emit()
+
+        except Exception as e:
+            self.error.emit(str(e))
+
+    @staticmethod
+    def is_newer(latest: str, current: str) -> bool:
+        try:
+            l = [int(x) for x in latest.split(".")]
+            c = [int(x) for x in current.split(".")]
+            while len(l) < 3: l.append(0)
+            while len(c) < 3: c.append(0)
+            return l > c
+        except:
+            return True  # ⬅️ если что-то пошло не так — ОБНОВЛЯЕМ
+
+
+# =========================
+# DOWNLOADER + BAT CREATOR
+# =========================
+
+class UpdateDownloader(QThread):
+    """
+    ✅ ИСПРАВЛЕНО: Теперь только скачивает и создает BAT файл
+    ❌ НЕ останавливает потоки (это делает главное окно)
+    ❌ НЕ запускает BAT (это делает главное окно)
+    """
+    progress = pyqtSignal(int)
+    finished = pyqtSignal(str)  # ← ИЗМЕНЕНО: теперь передает путь к BAT файлу
+    error = pyqtSignal(str)
+
+    def __init__(self, url: str, version: str):
+        super().__init__()
+        self.url = url
+        self.version = version
+
+        ts = int(time.time())
+        self.temp_dir = Path(os.getenv("TEMP", "/tmp")) / f"creditbot_update_{ts}"
+        self.log_file = self.temp_dir / "update.log"
+
+    def run(self):
+        try:
+            self.temp_dir.mkdir(exist_ok=True)
+
+            zip_path = self.temp_dir / "update.zip"
+            extract_dir = self.temp_dir / "extracted"
+
+            self._log("Скачивание обновления")
+            self._download(zip_path)
+
+            self._log("Распаковка")
+            extract_dir.mkdir(exist_ok=True)
+            with zipfile.ZipFile(zip_path, "r") as z:
+                z.extractall(extract_dir)
+
+            # ✅ Создаем BAT файл и возвращаем путь к нему
+            bat_path = self._create_bat_file(extract_dir)
+            self._log(f"BAT файл создан: {bat_path}")
+            
+            # ✅ Отправляем сигнал с путем к BAT файлу
+            self.finished.emit(str(bat_path))
+
+        except Exception as e:
+            self.error.emit(str(e))
+
+    # ---------- helpers ----------
+
+    def _download(self, path: Path):
+        r = requests.get(self.url, stream=True, timeout=30)
+        r.raise_for_status()
+
+        total = int(r.headers.get("content-length", 0))
+        downloaded = 0
+
+        with open(path, "wb") as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total > 0:
+                        self.progress.emit(int((downloaded / total) * 100))
+
+    def _create_bat_file(self, extract_dir: Path) -> Path:
+        """
+        ✅ ИСПРАВЛЕНО: Только создает BAT файл, НЕ запускает его
+        Возвращает путь к созданному BAT файлу
+        """
+        if getattr(sys, "frozen", False):
+            # Получаем ПОЛНЫЕ абсолютные пути (не короткие 8.3)
+            app_dir = os.path.abspath(os.path.dirname(sys.executable))
+            current_exe = os.path.basename(sys.executable)
+        else:
+            app_dir = os.path.abspath(os.path.dirname(__file__))
+            current_exe = "main.py"
+
+        self._log(f"Папка программы: {app_dir}")
+        self._log(f"Текущий exe: {current_exe}")
+
+        batch = self.temp_dir / "update.bat"
+        log_path = os.path.join(app_dir, "update.log")
+        extract_dir_str = str(extract_dir.resolve())  # Полный путь для BAT
+
+        # Увеличенный BAT с timeout 10 секунд и подробным логированием
+        content = f"""@echo off
+chcp 65001 >nul
+echo ============================================ > "{log_path}"
+echo CREDITBOT UPDATE LOG >> "{log_path}"
+echo ============================================ >> "{log_path}"
+echo [%date% %time%] Начало обновления >> "{log_path}"
+echo Текущий exe: {current_exe} >> "{log_path}"
+echo Целевой exe: {EXE_PREFIX}{self.version}.exe >> "{log_path}"
+echo. >> "{log_path}"
+
+REM Ждем полного завершения старого процесса (УВЕЛИЧЕНО до 10 сек)
+echo [%date% %time%] Ожидание завершения процесса Python... >> "{log_path}"
+timeout /t 10 /nobreak >nul
+
+REM Проверяем что процесс действительно завершился
+echo [%date% %time%] Проверка процессов... >> "{log_path}"
+tasklist | find /I "{current_exe}" >> "{log_path}" 2>&1
+if not errorlevel 1 (
+    echo WARNING: Процесс {current_exe} еще работает! >> "{log_path}"
+    echo Ждем еще 5 секунд... >> "{log_path}"
+    timeout /t 5 /nobreak >nul
+)
+
+REM Переименовываем старый exe
+echo [%date% %time%] Переименовываем старый exe >> "{log_path}"
+if exist "{app_dir}\\{current_exe}" (
+    echo Файл найден, переименовываем... >> "{log_path}"
+    ren "{app_dir}\\{current_exe}" "{current_exe}.old" >> "{log_path}" 2>&1
+    if errorlevel 1 (
+        echo ERROR: Не удалось переименовать старый exe >> "{log_path}"
+        echo Возможно файл еще используется процессом >> "{log_path}"
+        pause
+        exit /b 1
+    )
+    echo OK: Старый exe переименован >> "{log_path}"
+)
+
+REM Удаляем старые бэкапы
+echo [%date% %time%] Удаляем старые .old файлы >> "{log_path}"
+del /F /Q "{app_dir}\\{EXE_PREFIX}*.exe.old" 2>nul
+
+REM Копируем новый exe
+echo [%date% %time%] Копируем новый exe >> "{log_path}"
+copy /Y "{extract_dir_str}\\{EXE_PREFIX}{self.version}.exe" "{app_dir}\\" >> "{log_path}" 2>&1
+if errorlevel 1 (
+    echo ERROR: Не удалось скопировать exe >> "{log_path}"
+    goto RESTORE
+)
+echo OK: Новый exe скопирован >> "{log_path}"
+
+REM Копируем папку _internal (критична для onedir)
+echo [%date% %time%] Копируем папку _internal >> "{log_path}"
+if exist "{extract_dir_str}\\_internal" (
+    echo Удаляем старую _internal >> "{log_path}"
+    if exist "{app_dir}\\_internal" (
+        rmdir /S /Q "{app_dir}\\_internal" >> "{log_path}" 2>&1
+        if errorlevel 1 (
+            echo WARNING: Не удалось удалить старую _internal >> "{log_path}"
+        )
+    )
+    
+    echo Копируем новую _internal >> "{log_path}"
+    xcopy /E /I /Y /Q "{extract_dir_str}\\_internal" "{app_dir}\\_internal" >> "{log_path}" 2>&1
+    if errorlevel 1 (
+        echo ERROR: Не удалось скопировать _internal >> "{log_path}"
+        goto RESTORE
+    )
+    echo OK: _internal скопирована >> "{log_path}"
+) else (
+    echo WARNING: _internal не найдена в архиве >> "{log_path}"
+)
+
+REM Копируем остальные файлы
+echo [%date% %time%] Копируем остальные файлы >> "{log_path}"
+for /f "delims=" %%f in ('dir /b /a-d "{extract_dir}"') do (
+    if not "%%f"=="{EXE_PREFIX}{self.version}.exe" (
+        if not "%%f"=="_internal" (
+            echo   Копируем: %%f >> "{log_path}"
+            copy /Y "{extract_dir_str}\\%%f" "{app_dir}\\" >> "{log_path}" 2>&1
+        )
+    )
+)
+
+REM Проверка успешности
+echo [%date% %time%] Проверка результата >> "{log_path}"
+if exist "{app_dir}\\{EXE_PREFIX}{self.version}.exe" (
+    echo OK: Новый exe найден >> "{log_path}"
+    
+    REM Удаляем старый бэкап
+    if exist "{app_dir}\\{current_exe}.old" (
+        echo Удаляем старый бэкап >> "{log_path}"
+        del /F /Q "{app_dir}\\{current_exe}.old" >> "{log_path}" 2>&1
+    )
+    
+    echo [%date% %time%] Запускаем новую версию >> "{log_path}"
+    echo ============================================ >> "{log_path}"
+    echo ОБНОВЛЕНИЕ УСПЕШНО ЗАВЕРШЕНО >> "{log_path}"
+    echo ============================================ >> "{log_path}"
+    start "" "{app_dir}\\{EXE_PREFIX}{self.version}.exe"
+    goto CLEANUP
+) else (
+    echo ERROR: Новый exe НЕ найден после копирования! >> "{log_path}"
+    goto RESTORE
+)
+
+:RESTORE
+echo ============================================ >> "{log_path}"
+echo ОШИБКА! Попытка восстановления... >> "{log_path}"
+echo ============================================ >> "{log_path}"
+if exist "{app_dir}\\{current_exe}.old" (
+    ren "{app_dir}\\{current_exe}.old" "{current_exe}" >> "{log_path}" 2>&1
+    if errorlevel 1 (
+        echo CRITICAL: Не удалось восстановить! >> "{log_path}"
+    ) else (
+        echo Старая версия восстановлена >> "{log_path}"
+        start "" "{app_dir}\\{current_exe}"
+    )
+) else (
+    echo CRITICAL: Файл .old не найден! >> "{log_path}"
+)
+pause
+exit /b 1
+
+:CLEANUP
+echo [%date% %time%] Очистка временных файлов >> "{log_path}"
+timeout /t 2 /nobreak >nul
+rmdir /S /Q "{self.temp_dir}" 2>nul
+del "%~f0"
+"""
+
+        with open(batch, "w", encoding="cp866") as f:  # cp866 для корректного отображения русского текста
+            f.write(content)
+
+        self._log("BAT файл создан успешно")
+        return batch
+
+    def _log(self, text: str):
+        self.temp_dir.mkdir(exist_ok=True)
+        with open(self.log_file, "a", encoding="utf-8") as f:
+            f.write(text + "\n")
+        print("[UPDATER]", text)
+
+
+# =========================
+# ФУНКЦИЯ ЗАПУСКА BAT
+# =========================
+
+def execute_update_bat(bat_path: str):
+    """
+    ✅ НОВАЯ ФУНКЦИЯ: Запуск BAT файла обновления
+    Вызывается из главного потока ПОСЛЕ остановки всех QThread
+    """
+    print("[UPDATER] Запуск BAT файла обновления...")
+    
+    try:
+        # Получаем приложение PyQt
+        from PyQt6.QtWidgets import QApplication
+        app = QApplication.instance()
+        
+        if app:
+            print("[UPDATER] Останавливаем все потоки...")
+            stop_all_threads()
+            
+            print("[UPDATER] Закрываем все окна...")
+            app.closeAllWindows()
+            
+            # Ждем завершения закрытия окон
+            time.sleep(1)
+            
+            print("[UPDATER] Отправляем сигнал quit()...")
+            app.quit()
+            
+            # Задержка для полного завершения процессов
+            print("[UPDATER] Ожидание завершения процессов (3 сек)...")
+            time.sleep(3)
+        
+        print(f"[UPDATER] Запуск BAT: {bat_path}")
+        
+        # Запускаем BAT в отдельном процессе (ИСПРАВЛЕНО: убран CREATE_NEW_CONSOLE)
+        subprocess.Popen(
+            [bat_path],
+            shell=True,
+            creationflags=subprocess.DETACHED_PROCESS,
+            cwd=os.path.dirname(bat_path)
+        )
+        
+        print("[UPDATER] BAT запущен, завершаем Python процесс...")
+        
+        # Принудительное завершение
+        time.sleep(1)
+        sys.exit(0)
+        
+    except Exception as e:
+        print(f"[UPDATER] Ошибка запуска BAT: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+# =========================
+# СИНХРОННАЯ ПРОВЕРКА
+# =========================
+
+def check_for_updates_sync():
+    """
+    Синхронная проверка обновлений (без QThread)
+    """
+    try:
+        r = requests.get(GITHUB_API_URL, timeout=10,
+                         headers={"User-Agent": "CreditBot-Updater"})
+        if r.status_code != 200:
+            return {"available": False}
+
+        data = r.json()
+        latest = data["tag_name"].lstrip("v")
+
+        if UpdateChecker.is_newer(latest, CURRENT_VERSION):
+            for asset in data.get("assets", []):
+                if asset["name"].endswith(".zip"):
+                    return {
+                        "available": True,
+                        "version": latest,
+                        "url": asset["browser_download_url"]
+                    }
+
+        return {"available": False}
+    except:
+        return {"available": False, "error": True}
+
+
+# =========================
+# ИНИЦИАЛИЗАЦИЯ
+# =========================
+
+# Очищаем старые временные файлы при импорте модуля
+cleanup_old_temp_files()

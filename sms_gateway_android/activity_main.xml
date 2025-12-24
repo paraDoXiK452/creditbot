@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    tools:context=".MainActivity">
+
+    <!-- Заголовок -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="📱 SMS Gateway для CreditBot"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:paddingBottom="16dp"/>
+
+    <!-- Статус -->
+    <TextView
+        android:id="@+id/tv_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Статус: Требуется настройка"
+        android:textSize="16sp"
+        android:paddingBottom="8dp"/>
+
+    <!-- Статистика -->
+    <TextView
+        android:id="@+id/tv_stats"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="📊 Отправлено: 0 | Ошибок: 0"
+        android:textSize="14sp"
+        android:paddingBottom="8dp"/>
+
+    <!-- Выбор SIM-карты -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="📞 Выбор SIM-карты:"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:paddingTop="8dp"
+        android:paddingBottom="4dp"/>
+
+    <RadioGroup
+        android:id="@+id/radio_group_sim"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingBottom="16dp">
+
+        <RadioButton
+            android:id="@+id/radio_sim_default"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="По умолчанию"
+            android:checked="true"/>
+
+        <RadioButton
+            android:id="@+id/radio_sim1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="SIM 1"/>
+
+        <RadioButton
+            android:id="@+id/radio_sim2"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="SIM 2"/>
+    </RadioGroup>
+
+    <!-- Кнопки управления -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center">
+
+        <Button
+            android:id="@+id/btn_scan_qr"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="🔍 Сканировать QR"
+            android:layout_marginEnd="4dp"/>
+
+        <Button
+            android:id="@+id/btn_test_sms"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="🧪 Тест"
+            android:layout_marginStart="4dp"/>
+    </LinearLayout>
+
+    <!-- Кнопка установки как SMS по умолчанию -->
+    <Button
+        android:id="@+id/btn_set_default_sms"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="🔧 Установить как SMS по умолчанию"
+        android:layout_marginTop="8dp"
+        android:backgroundTint="#FF9800"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:paddingTop="8dp">
+
+        <Button
+            android:id="@+id/btn_start_service"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="▶️ Запустить"
+            android:layout_marginEnd="4dp"
+            android:enabled="false"/>
+
+        <Button
+            android:id="@+id/btn_stop_service"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="⏹️ Остановить"
+            android:layout_marginStart="4dp"/>
+    </LinearLayout>
+
+    <!-- Заголовок логов -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingTop="16dp"
+        android:paddingBottom="8dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="📋 Логи:"
+            android:textSize="16sp"
+            android:textStyle="bold"/>
+
+        <Button
+            android:id="@+id/btn_clear_logs"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Очистить"
+            android:padding="8dp"
+            style="?android:attr/buttonBarButtonStyle"/>
+    </LinearLayout>
+
+    <!-- Логи -->
+    <ScrollView
+        android:id="@+id/scroll_view"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="#F5F5F5"
+        android:padding="8dp">
+
+        <TextView
+            android:id="@+id/tv_logs"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:fontFamily="monospace"
+            android:text="Ожидание действий...\n"/>
+    </ScrollView>
+
+    <!-- Инструкция -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="💡 Инструкция:\n1. Нажмите 'Сканировать QR' и отсканируйте код из CreditBot\n2. Нажмите 'Запустить' для начала работы\n3. Телефон может работать в фоне"
+        android:textSize="11sp"
+        android:paddingTop="8dp"
+        android:textColor="#666666"/>
+
+</LinearLayout>

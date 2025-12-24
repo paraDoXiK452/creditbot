@@ -1,0 +1,105 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Config и данные
+bot_config.json
+cookies.json
+app_settings.json
+*.xlsx
+*.xls
+!example.xlsx
+
+# Временные файлы
+*.tmp
+*.bak
+*.cache
+
+# EasyOCR модели
+.EasyOCR/
+user_network/
+
+# ChromeDriver
+chromedriver
+chromedriver.exe
+
+# Secrets
+.env
+secrets.json
+credentials.json
+
+# КРИТИЧНО! Лицензии и ключи
+*.key
+private_key.pem
+public_key.pem
+
+# База данных
+*.db
+*.sqlite
+*.sqlite3
+
+# Telegram bot
+shared/
+bot_status.json
+bot_commands.json
+bot_logs.txt
+
+# PyInstaller
+*.spec
+
+# СЕКРЕТНЫЕ ФАЙЛЫ
+secret_files/
+**/ПАРОЛЬ.txt
+**/admin_password.txt
+
+# Chrome данные
+BOT_CHROME_DATA_*/
+
+# Мусорные файлы
+**/*Текстовый документ*.txt
+**/*Текстовый документ*.ph
+uploads/
+ВЫДАЧА/
+
+# Другое
+*.txt
+!requirements.txt
+!README.txt
+license_config.json
