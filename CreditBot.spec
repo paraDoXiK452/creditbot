@@ -59,10 +59,9 @@ a = Analysis(
         'core.password_reset_processor',
         'core.writeoffs_processor',
         'core.browser',
-        'core.captcha',
+        'core.captcha',          # ← С core. (не просто captcha)
         'core.utils',
-        # Капча и OCR
-        'captcha',
+        # Капча и OCR (pip модули)
         'easyocr',
         'torch',
         'torchvision',
