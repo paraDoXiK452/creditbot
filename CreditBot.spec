@@ -52,17 +52,17 @@ a = Analysis(
         'selenium_stealth',
         'undetected_chromedriver',
         'cv2',
-        # КРИТИЧНО: Процессоры (импортируются в try/except)
+        # КРИТИЧНО: Процессоры (в core/)
         'core.calls_processor',
         'core.bankruptcy_processor',
         'core.comments_processor',
         'core.password_reset_processor',
         'core.writeoffs_processor',
         'core.browser',
-        'core.captcha',          # ← С core. (не просто captcha)
+        'core.captcha',          # ← Только ЭТО (с core.)
         'core.utils',
         # Капча и OCR (pip модули)
-        'easyocr',
+        'easyocr',              # ← НЕ captcha!
         'torch',
         'torchvision',
         'PIL',
