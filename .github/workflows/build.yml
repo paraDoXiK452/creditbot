@@ -57,8 +57,8 @@ jobs:
       
       - name: Create ZIP
         run: |
-          cd dist/CreditBotV${{ steps.get_version.outputs.VERSION }}
-          powershell Compress-Archive -Path * -DestinationPath ../CreditBot-Windows.zip
+          cd dist
+          powershell Compress-Archive -Path CreditBotV${{ steps.get_version.outputs.VERSION }} -DestinationPath CreditBot-Windows.zip
       
       - name: Upload Windows build
         uses: actions/upload-artifact@v4
@@ -114,20 +114,42 @@ jobs:
         run: |
           pyinstaller --clean CreditBot_build.spec
       
-      - name: Set executable permissions
+      - name: Create start.command launcher
         run: |
-          chmod +x dist/CreditBotV${{ steps.get_version.outputs.VERSION }}/CreditBotV${{ steps.get_version.outputs.VERSION }}
+          cat > dist/start.command << 'EOF'
+          #!/bin/bash
+          cd "$(dirname "$0")"
+          
+          # Снимаем quarantine с приложения
+          xattr -dr com.apple.quarantine CreditBot.app 2>/dev/null || true
+          
+          # Запускаем
+          open CreditBot.app
+          EOF
+          chmod +x dist/start.command
       
-      - name: Create ZIP with permissions preserved
+      - name: Remove quarantine from app
         run: |
-          cd dist/CreditBotV${{ steps.get_version.outputs.VERSION }}
-          zip -r ../CreditBot-macOS.zip * -X
+          xattr -dr com.apple.quarantine dist/CreditBot.app || true
+      
+      - name: Create ZIP with ditto
+        run: |
+          cd dist
+          ditto -c -k --keepParent CreditBot.app ../CreditBot.app.zip
+          ditto -c -k --keepParent start.command ../start.command.zip
+      
+      - name: Combine into final archive
+        run: |
+          mkdir -p CreditBot-macOS
+          cp -R dist/CreditBot.app CreditBot-macOS/
+          cp dist/start.command CreditBot-macOS/
+          ditto -c -k --keepParent CreditBot-macOS CreditBot-macOS.zip
       
       - name: Upload macOS build
         uses: actions/upload-artifact@v4
         with:
           name: CreditBot-macOS
-          path: dist/CreditBot-macOS.zip
+          path: CreditBot-macOS.zip
 
   create-release:
     needs: [build-windows, build-macos]
@@ -154,27 +176,41 @@ jobs:
           body: |
             ## 🚀 CreditBot ${{ github.ref_name }}
             
-            ### 📦 Скачать:
+            ### 📦 Установка:
             
             **Windows (x64):**
-            - Скачай `CreditBot-Windows.zip`
-            - Распакуй
-            - Запусти `CreditBotV${{ github.ref_name }}.exe`
+            1. Скачай `CreditBot-Windows.zip`
+            2. Распакуй в любую папку
+            3. Запусти `CreditBotV${{ github.ref_name }}.exe`
             
             **macOS (Intel/Apple Silicon):**
-            - Скачай `CreditBot-macOS.zip`
-            - Распакуй
-            - Открой Terminal в папке
-            - Выполни: `chmod +x CreditBotV${{ github.ref_name }}`
-            - Запусти: `./CreditBotV${{ github.ref_name }}`
+            1. Скачай `CreditBot-macOS.zip`
+            2. Распакуй в любую папку
+            3. **Двойной клик** на `start.command` ✨
+            4. Готово! Приложение запустится автоматически
+            
+            > 💡 macOS может спросить разрешение при первом запуске — нажмите "Открыть"
             
             ### 🔄 Автообновление:
             - Для пользователей v1.4.5+ обновление автоматическое (только Windows)
             
             ### ✨ Что нового:
-            - Поддержка macOS
-            - Встроенный OpenAI API ключ
-            - Исправлен автообновлятор
-            - Кроссплатформенная генерация HWID
+            - ✅ Полная поддержка macOS (.app bundle)
+            - ✅ Запуск в один клик (start.command)
+            - ✅ Все процессоры включены (звонки, банкротства, комментарии, списания)
+            - ✅ Полная поддержка EasyOCR для капчи
+            - ✅ Встроенный OpenAI API ключ
+            - ✅ Исправлен автообновлятор (robocopy + ren)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+---
+
+## 🎯 ЧТО ПОЛУЧИТСЯ:
+
+**macOS архив содержит:**
+```
+CreditBot-macOS/
+├── CreditBot.app          ← macOS приложение (двойной клик работает!)
+└── start.command          ← Автоснятие quarantine + запуск

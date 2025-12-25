@@ -44,17 +44,48 @@ a = Analysis(
     binaries=[],
     datas=datas,
     hiddenimports=[
-        'selenium_stealth',
-        'undetected_chromedriver',
-        'cv2',
+        # PyQt6
         'PyQt6.QtCore',
         'PyQt6.QtWidgets',
         'PyQt6.QtGui',
+        # Selenium и автоматизация
+        'selenium_stealth',
+        'undetected_chromedriver',
+        'cv2',
+        # КРИТИЧНО: Процессоры (импортируются в try/except)
+        'core.calls_processor',
+        'core.bankruptcy_processor',
+        'core.comments_processor',
+        'core.password_reset_processor',
+        'core.writeoffs_processor',
+        'core.browser',
+        'core.captcha',
+        'core.utils',
+        # Капча и OCR
+        'captcha',
+        'easyocr',
+        'torch',
+        'torchvision',
+        'PIL',
+        'PIL.Image',
+        'PIL.ImageEnhance',
+        # Математика и обработка
+        'numpy',
+        'scipy',
+        'skimage',
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        # Исключаем ненужные тяжелые библиотеки
+        'tensorflow',
+        'transformers',
+        'diffusers',
+        'accelerate',
+        'spacy',
+        'nltk',
+    ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -68,7 +99,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='CreditBotV{VERSION}',
+    name='CreditBot' if sys.platform == 'darwin' else 'CreditBotV{VERSION}',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -89,5 +120,21 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='CreditBotV{VERSION}',
+    name='CreditBot' if sys.platform == 'darwin' else 'CreditBotV{VERSION}',
 )
+
+# macOS: Создаем .app bundle
+if sys.platform == 'darwin':
+    app = BUNDLE(
+        coll,
+        name='CreditBot.app',
+        icon=None,
+        bundle_identifier='com.creditbot.app',
+        info_plist={
+            'CFBundleName': 'CreditBot',
+            'CFBundleDisplayName': 'CreditBot',
+            'CFBundleVersion': '{VERSION}',
+            'CFBundleShortVersionString': '{VERSION}',
+            'NSHighResolutionCapable': True,
+        },
+    )
