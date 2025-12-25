@@ -52,17 +52,22 @@ a = Analysis(
         'selenium_stealth',
         'undetected_chromedriver',
         'cv2',
-        # КРИТИЧНО: Процессоры (в core/)
+        # КРИТИЧНО: Процессоры И ИХ ЗАВИСИМОСТИ
         'core.calls_processor',
         'core.bankruptcy_processor',
         'core.comments_processor',
         'core.password_reset_processor',
         'core.writeoffs_processor',
         'core.browser',
-        'core.captcha',          # ← Только ЭТО (с core.)
+        'core.captcha',
         'core.utils',
-        # Капча и OCR (pip модули)
-        'easyocr',              # ← НЕ captcha!
+        'core.auth_maxcredit',       # ← ДОБАВЬ!
+        # Вспомогательные модули (из корня)
+        'zoiper_automation',          # ← ДОБАВЬ!
+        'status_manager',             # ← ДОБАВЬ!
+        'telegram_manager',           # ← УЖЕ ЕСТЬ?
+        # Капча и OCR
+        'easyocr',
         'torch',
         'torchvision',
         'PIL',
