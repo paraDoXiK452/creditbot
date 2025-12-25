@@ -4,17 +4,25 @@
 • Демо на 7 дней, только 1 раз на компьютер
 • RSA подпись создается АВТОМАТИЧЕСКИ при активации
 • Приватный ключ встроен в программу для удобства
-• Запись в реестр Windows для защиты от удаления файла
+• Запись в реестр Windows для защиты от удаления файла (только Windows)
 • Проверка подписи при каждом чтении demo.key
 • Файлы ищутся РЯДОМ с EXE, а не в текущей папке
+• ПОДДЕРЖКА macOS/Linux: использует файловую систему вместо реестра
 """
 
 import os
 import json
 import sys
-import winreg
+import platform
 from datetime import datetime, timedelta
 from hwid_generator import get_hwid
+
+# ✅ УСЛОВНЫЙ ИМПОРТ winreg только для Windows
+if platform.system() == 'Windows':
+    import winreg
+    REGISTRY_AVAILABLE = True
+else:
+    REGISTRY_AVAILABLE = False
 
 try:
     from cryptography.hazmat.primitives import hashes, serialization
@@ -29,7 +37,7 @@ except ImportError:
 class DemoManager:
     """Управление защищённым демо-режимом с автоматической RSA подписью"""
     
-    # Реестр Windows для хранения информации о демо
+    # Реестр Windows для хранения информации о демо (только Windows)
     REGISTRY_PATH = r"Software\MaxCreditBot\Demo"
     
     # ПУБЛИЧНЫЙ КЛЮЧ (для проверки подписи)
@@ -93,7 +101,13 @@ x4ury3kOPnIrTd9d2cxp6V+O+RkaAoCnKXR/+F/gHYGDl0V4vdwn3DaDJUZv9mwa
         # Файл демо РЯДОМ с программой
         self.demo_file = os.path.join(app_dir, demo_file)
         
-        print(f"🔍 Ищу demo.key в: {self.demo_file}")  # Для отладки
+        # ✅ На macOS/Linux используем скрытый файл для хранения метаданных
+        self.metadata_file = os.path.join(app_dir, ".demo_metadata")
+        
+        print(f"🔍 Ищу demo.key в: {self.demo_file}")
+        print(f"📁 Платформа: {platform.system()}")
+        if not REGISTRY_AVAILABLE:
+            print(f"📝 Использую файл метаданных: {self.metadata_file}")
         
         self.demo_days = 7  # Демо на 7 дней
         self.public_key = None
@@ -133,25 +147,60 @@ x4ury3kOPnIrTd9d2cxp6V+O+RkaAoCnKXR/+F/gHYGDl0V4vdwn3DaDJUZv9mwa
             self.private_key = None
     
     def _get_registry_value(self, name, default=None):
-        """Получить значение из реестра Windows"""
-        try:
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, self.REGISTRY_PATH, 0, winreg.KEY_READ)
-            value, _ = winreg.QueryValueEx(key, name)
-            winreg.CloseKey(key)
-            return value
-        except WindowsError:
+        """Получить значение из реестра Windows или файла метаданных"""
+        if REGISTRY_AVAILABLE:
+            # Windows - используем реестр
+            try:
+                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, self.REGISTRY_PATH, 0, winreg.KEY_READ)
+                value, _ = winreg.QueryValueEx(key, name)
+                winreg.CloseKey(key)
+                return value
+            except:
+                return default
+        else:
+            # macOS/Linux - используем файл метаданных
+            try:
+                if os.path.exists(self.metadata_file):
+                    with open(self.metadata_file, 'r', encoding='utf-8') as f:
+                        metadata = json.load(f)
+                        return metadata.get(name, default)
+            except:
+                pass
             return default
     
     def _set_registry_value(self, name, value):
-        """Записать значение в реестр Windows"""
-        try:
-            key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, self.REGISTRY_PATH)
-            winreg.SetValueEx(key, name, 0, winreg.REG_SZ, str(value))
-            winreg.CloseKey(key)
-            return True
-        except Exception as e:
-            print(f"⚠️ Ошибка записи в реестр: {e}")
-            return False
+        """Записать значение в реестр Windows или файл метаданных"""
+        if REGISTRY_AVAILABLE:
+            # Windows - используем реестр
+            try:
+                key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, self.REGISTRY_PATH)
+                winreg.SetValueEx(key, name, 0, winreg.REG_SZ, str(value))
+                winreg.CloseKey(key)
+                return True
+            except Exception as e:
+                print(f"⚠️ Ошибка записи в реестр: {e}")
+                return False
+        else:
+            # macOS/Linux - используем файл метаданных
+            try:
+                metadata = {}
+                if os.path.exists(self.metadata_file):
+                    with open(self.metadata_file, 'r', encoding='utf-8') as f:
+                        metadata = json.load(f)
+                
+                metadata[name] = str(value)
+                
+                with open(self.metadata_file, 'w', encoding='utf-8') as f:
+                    json.dump(metadata, f, ensure_ascii=False, indent=2)
+                
+                # Делаем файл скрытым на macOS/Linux
+                if platform.system() != 'Windows':
+                    os.chmod(self.metadata_file, 0o600)  # Только владелец может читать/писать
+                
+                return True
+            except Exception as e:
+                print(f"⚠️ Ошибка записи в файл метаданных: {e}")
+                return False
     
     def is_demo_available(self):
         """
@@ -162,7 +211,7 @@ x4ury3kOPnIrTd9d2cxp6V+O+RkaAoCnKXR/+F/gHYGDl0V4vdwn3DaDJUZv9mwa
         """
         current_hwid = get_hwid()
         
-        # Проверяем реестр (ГЛАВНАЯ ЗАЩИТА!)
+        # Проверяем реестр/метаданные (ГЛАВНАЯ ЗАЩИТА!)
         registry_used = self._get_registry_value("used", "0")
         registry_hwid = self._get_registry_value("hwid", "")
         
@@ -175,13 +224,13 @@ x4ury3kOPnIrTd9d2cxp6V+O+RkaAoCnKXR/+F/gHYGDl0V4vdwn3DaDJUZv9mwa
                 # Для безопасности считаем что демо недоступно
                 return False
         
-        # Дополнительно проверяем файл (если реестр пуст)
+        # Дополнительно проверяем файл (если реестр/метаданные пусты)
         if os.path.exists(self.demo_file):
             try:
                 demo_info = self._read_and_verify_demo_file()
                 if demo_info and demo_info.get('hwid') == current_hwid:
                     # Файл есть, HWID совпадает, подпись валидна - демо использовалось
-                    # Обновляем реестр
+                    # Обновляем реестр/метаданные
                     self._set_registry_value("used", "1")
                     self._set_registry_value("hwid", current_hwid)
                     return False
@@ -192,40 +241,34 @@ x4ury3kOPnIrTd9d2cxp6V+O+RkaAoCnKXR/+F/gHYGDl0V4vdwn3DaDJUZv9mwa
     
     def activate_demo(self):
         """
-        Активирует демо-режим с АВТОМАТИЧЕСКОЙ RSA подписью
-        Создает demo.key с подписью прямо при активации!
+        Активирует демо-режим с АВТОМАТИЧЕСКОЙ ПОДПИСЬЮ
+        Создаёт подписанный файл demo.key БЕЗ внешнего private_key.pem
         
         Returns:
             dict: {"success": True/False, "message": "...", "expires": datetime}
         """
-        # Проверяем доступность демо
         if not self.is_demo_available():
             return {
                 "success": False,
-                "message": "❌ Демо-режим уже использовался на этом компьютере!",
+                "message": "❌ Демо-режим уже использовался на этом компьютере",
                 "expires": None
             }
         
+        # Создаём данные для демо
         current_hwid = get_hwid()
         started = datetime.now()
         expires = started + timedelta(days=self.demo_days)
         
-        # Данные демо
         demo_data = {
             "hwid": current_hwid,
             "started": started.strftime("%Y-%m-%d %H:%M:%S"),
-            "expires": expires.strftime("%Y-%m-%d %H:%M:%S"),
-            "days": self.demo_days,
-            "type": "demo"
+            "expires": expires.strftime("%Y-%m-%d %H:%M:%S")
         }
         
-        # === АВТОМАТИЧЕСКАЯ ПОДПИСЬ ===
+        # ✅ АВТОМАТИЧЕСКАЯ ПОДПИСЬ (если есть приватный ключ)
         if CRYPTO_AVAILABLE and self.private_key:
             try:
-                # Создаём строку для подписи
-                data_string = f"{demo_data['hwid']}|{demo_data['started']}|{demo_data['expires']}"
-                
-                # ПОДПИСЫВАЕМ данные приватным ключом
+                data_string = f"{current_hwid}|{demo_data['started']}|{demo_data['expires']}"
                 signature = self.private_key.sign(
                     data_string.encode(),
                     padding.PSS(
@@ -234,49 +277,48 @@ x4ury3kOPnIrTd9d2cxp6V+O+RkaAoCnKXR/+F/gHYGDl0V4vdwn3DaDJUZv9mwa
                     ),
                     hashes.SHA256()
                 )
-                
-                # Добавляем подпись в данные
                 demo_data["signature"] = signature.hex()
-                
-                print("✅ Demo.key подписан автоматически!")
-                
+                print("✅ Демо-файл подписан АВТОМАТИЧЕСКИ встроенным ключом!")
             except Exception as e:
-                print(f"⚠️ Не удалось создать подпись: {e}")
-                print("   Demo.key будет создан БЕЗ подписи")
+                print(f"⚠️ Ошибка при подписи: {e}")
+                print("⚠️ Файл будет создан БЕЗ подписи")
         else:
-            print("⚠️ Приватный ключ недоступен, demo.key создается БЕЗ подписи")
+            print("⚠️ Подпись недоступна - файл создается без защиты")
         
-        # Сохраняем файл (с подписью если удалось создать)
+        # Сохраняем файл
         try:
             with open(self.demo_file, 'w', encoding='utf-8') as f:
                 json.dump(demo_data, f, ensure_ascii=False, indent=2)
+            
+            # Записываем в реестр/метаданные (защита от удаления файла)
+            self._set_registry_value("used", "1")
+            self._set_registry_value("hwid", current_hwid)
+            self._set_registry_value("started", demo_data['started'])
+            self._set_registry_value("expires", demo_data['expires'])
+            
+            message = f"✅ Демо активировано до {expires.strftime('%d.%m.%Y %H:%M')}"
+            if "signature" in demo_data:
+                message += " (подписано)"
+            
+            return {
+                "success": True,
+                "message": message,
+                "expires": expires
+            }
+            
         except Exception as e:
             return {
                 "success": False,
-                "message": f"❌ Ошибка создания файла демо: {e}",
+                "message": f"❌ Ошибка создания demo-файла: {e}",
                 "expires": None
             }
-        
-        # ВАЖНО: Записываем в реестр Windows!
-        self._set_registry_value("used", "1")
-        self._set_registry_value("hwid", current_hwid)
-        self._set_registry_value("expires", expires.strftime("%Y-%m-%d %H:%M:%S"))
-        self._set_registry_value("started", started.strftime("%Y-%m-%d %H:%M:%S"))
-        
-        return {
-            "success": True,
-            "message": f"✅ Демо-режим активирован на {self.demo_days} дней!\n"
-                      f"Действует до: {expires.strftime('%d.%m.%Y %H:%M')}\n\n"
-                      f"⚠️ Демо можно использовать только 1 раз на компьютер!",
-            "expires": expires
-        }
     
     def _read_and_verify_demo_file(self):
         """
-        Читает и ПРОВЕРЯЕТ ПОДПИСЬ файла demo.key
+        Читает demo-файл И ПРОВЕРЯЕТ ЕГО ПОДПИСЬ
         
         Returns:
-            dict или None: Данные демо если подпись валидна, None если файла нет или подпись неверная
+            dict или None: Возвращает данные только если подпись валидна (или её нет)
         """
         if not os.path.exists(self.demo_file):
             return None
@@ -285,25 +327,27 @@ x4ury3kOPnIrTd9d2cxp6V+O+RkaAoCnKXR/+F/gHYGDl0V4vdwn3DaDJUZv9mwa
             with open(self.demo_file, 'r', encoding='utf-8') as f:
                 demo_data = json.load(f)
         except Exception as e:
-            print(f"⚠️ Ошибка чтения демо-файла: {e}")
+            print(f"❌ Ошибка чтения файла: {e}")
             return None
         
-        # Если нет подписи - файл создан БЕЗ защиты (допускаем для обратной совместимости)
-        if 'signature' not in demo_data:
-            print("⚠️ Demo-файл без подписи (старая версия или ошибка)")
+        # Если подписи нет - возвращаем как есть (старый формат)
+        if "signature" not in demo_data:
+            print("⚠️ Файл без подписи (старый формат)")
             return demo_data
         
-        # Проверяем подпись
+        # ПРОВЕРКА ПОДПИСИ
         if not CRYPTO_AVAILABLE or not self.public_key:
-            print("⚠️ Не могу проверить подпись демо-файла (нет cryptography или ключа)")
+            print("⚠️ Нет cryptography - подпись не проверяется!")
             return demo_data
-        
-        # Формируем строку для проверки подписи (такую же как при создании)
-        data_string = f"{demo_data.get('hwid', '')}|{demo_data.get('started', '')}|{demo_data.get('expires', '')}"
         
         try:
-            signature = bytes.fromhex(demo_data['signature'])
+            # Восстанавливаем подпись из hex
+            signature = bytes.fromhex(demo_data["signature"])
             
+            # Воссоздаём строку которая подписывалась
+            data_string = f"{demo_data['hwid']}|{demo_data['started']}|{demo_data['expires']}"
+            
+            # Проверяем подпись
             self.public_key.verify(
                 signature,
                 data_string.encode(),
@@ -325,7 +369,7 @@ x4ury3kOPnIrTd9d2cxp6V+O+RkaAoCnKXR/+F/gHYGDl0V4vdwn3DaDJUZv9mwa
     def check_demo(self):
         """
         Проверяет статус демо-режима
-        Использует реестр как главный источник (защита от удаления файла)
+        Использует реестр/метаданные как главный источник (защита от удаления файла)
         ПРОВЕРЯЕТ ПОДПИСЬ при чтении файла!
         
         Returns:
@@ -333,12 +377,12 @@ x4ury3kOPnIrTd9d2cxp6V+O+RkaAoCnKXR/+F/gHYGDl0V4vdwn3DaDJUZv9mwa
         """
         current_hwid = get_hwid()
         
-        # СНАЧАЛА проверяем реестр (главная защита)
+        # СНАЧАЛА проверяем реестр/метаданные (главная защита)
         registry_used = self._get_registry_value("used", "0")
         registry_hwid = self._get_registry_value("hwid", "")
         registry_expires = self._get_registry_value("expires", "")
         
-        # Если в реестре есть информация - используем её
+        # Если в реестре/метаданных есть информация - используем её
         if registry_used == "1" and registry_hwid and registry_expires:
             # Проверяем HWID
             if registry_hwid != current_hwid:
@@ -365,9 +409,9 @@ x4ury3kOPnIrTd9d2cxp6V+O+RkaAoCnKXR/+F/gHYGDl0V4vdwn3DaDJUZv9mwa
                 # ВАЖНО: Если файла demo.key нет - пересоздаем его с подписью!
                 # Это нужно если пользователь обновил программу или удалил файл
                 if not os.path.exists(self.demo_file):
-                    print("⚠️ Файл demo.key отсутствует, пересоздаю с подписью из registry...")
+                    print("⚠️ Файл demo.key отсутствует, пересоздаю с подписью из registry/metadata...")
                     
-                    # Получаем дату начала из registry
+                    # Получаем дату начала из registry/metadata
                     registry_started = self._get_registry_value("started", "")
                     if not registry_started:
                         # Если даты начала нет - вычисляем её (expires - 7 дней)
@@ -414,7 +458,7 @@ x4ury3kOPnIrTd9d2cxp6V+O+RkaAoCnKXR/+F/gHYGDl0V4vdwn3DaDJUZv9mwa
             except ValueError:
                 pass  # Падаем к проверке файла
         
-        # Если реестр пуст - проверяем файл С ПРОВЕРКОЙ ПОДПИСИ
+        # Если реестр/метаданные пусты - проверяем файл С ПРОВЕРКОЙ ПОДПИСИ
         demo_data = self._read_and_verify_demo_file()
         
         if not demo_data:
@@ -443,7 +487,7 @@ x4ury3kOPnIrTd9d2cxp6V+O+RkaAoCnKXR/+F/gHYGDl0V4vdwn3DaDJUZv9mwa
                     "days_left": 0
                 }
             
-            # Демо активно - обновляем реестр (синхронизация)
+            # Демо активно - обновляем реестр/метаданные (синхронизация)
             days_left = (expires - datetime.now()).days + 1
             
             self._set_registry_value("used", "1")
@@ -491,8 +535,8 @@ if __name__ == "__main__":
         print(f"   Успех: {result['success']}")
         print(f"   Сообщение: {result['message']}")
     
-    # Проверяем реестр
-    print(f"\n4. Проверка реестра:")
+    # Проверяем реестр/метаданные
+    print(f"\n4. Проверка хранилища:")
     print(f"   used: {manager._get_registry_value('used')}")
     print(f"   hwid: {manager._get_registry_value('hwid')}")
     print(f"   expires: {manager._get_registry_value('expires')}")
